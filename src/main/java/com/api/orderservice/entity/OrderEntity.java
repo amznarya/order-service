@@ -1,6 +1,7 @@
 package com.api.orderservice.entity;
 
 import jakarta.persistence.*;
+
 import java.time.OffsetDateTime;
 
 @Entity
@@ -52,5 +53,9 @@ public class OrderEntity {
 
     public OffsetDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public void updateStatus(String newStatus) {
+        this.status = newStatus;
     }
 }
