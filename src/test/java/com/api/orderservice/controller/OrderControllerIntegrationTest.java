@@ -31,10 +31,10 @@ class OrderControllerIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
     private ObjectMapper objectMapper;
 
     private MockMvc mockMvc() {
-        this.objectMapper = new ObjectMapper();
         return MockMvcBuilders.webAppContextSetup(context).build();
     }
 
