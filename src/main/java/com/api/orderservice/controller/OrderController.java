@@ -1,31 +1,44 @@
 package com.api.orderservice.controller;
 
+import com.api.orderservice.dto.CreateOrderRequest;
+import com.api.orderservice.dto.OrderResponse;
+import com.api.orderservice.service.OrderService;
+
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
+import java.net.URI;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/orders")
+@RequestMapping("/api/v1/orders")
 public class OrderController {
 
-    @PostMapping
-    public Map<String, Object> createOrder(
-            @RequestBody Map<String, Object> request) {
+    private final OrderService orderService;
 
-        return Map.of(
-                "orderId", UUID.randomUUID().toString(),
-                "status", "CREATED"
-        );
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
     }
 
-    @GetMapping("/{id}")
-    public Map<String, Object> getOrder(
-            @PathVariable String id) {
+    @PostMapping
+    public ResponseEntity<OrderResponse> createOrder(
+            @RequestHeader("Idempotency-Key") UUID idempotencyKey,
+            @Valid @RequestBody CreateOrderRequest request
+    ) {
+        OrderResponse response =
+                orderService.createOrder(request, idempotencyKey);
 
-        return Map.of(
-                "orderId", id,
-                "status", "CREATED"
-        );
+        return ResponseEntity
+                .created(URI.create("/api/v1/orders/" + response.id()))
+                .body(response);
+    }
+
+    @GetMapping("/{orderId}")
+    public ResponseEntity<OrderResponse> getOrder(
+            @PathVariable Long orderId
+    ) {
+        return ResponseEntity.ok(orderService.getOrder(orderId));
     }
 }
