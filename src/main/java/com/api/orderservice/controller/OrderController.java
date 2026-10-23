@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.util.UUID;
+import com.api.orderservice.dto.UpdateOrderStatusRequest;
+import org.springframework.web.bind.annotation.PatchMapping;
 
 @RestController
 @RequestMapping("/api/v1/orders")
@@ -40,5 +42,18 @@ public class OrderController {
             @PathVariable Long orderId
     ) {
         return ResponseEntity.ok(orderService.getOrder(orderId));
+    }
+
+    @PatchMapping("/{orderId}/status")
+    public ResponseEntity<OrderResponse> updateOrderStatus(
+            @PathVariable Long orderId,
+            @Valid @RequestBody UpdateOrderStatusRequest request
+    ) {
+        OrderResponse response = orderService.updateOrderStatus(
+                orderId,
+                request.status()
+        );
+
+        return ResponseEntity.ok(response);
     }
 }
