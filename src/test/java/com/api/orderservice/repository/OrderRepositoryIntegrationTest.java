@@ -1,5 +1,6 @@
 package com.api.orderservice.repository;
 
+import com.api.orderservice.PostgresIntegrationTest;
 import com.api.orderservice.entity.OrderEntity;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @Testcontainers
 @Transactional
-class OrderRepositoryIntegrationTest {
+class OrderRepositoryIntegrationTest extends PostgresIntegrationTest {
 
     @Container
     @ServiceConnection
