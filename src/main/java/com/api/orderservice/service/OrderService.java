@@ -8,6 +8,7 @@ import com.api.orderservice.exception.OrderNotFoundException;
 import com.api.orderservice.repository.IdempotencyRepository;
 import com.api.orderservice.repository.OrderRepository;
 import jakarta.persistence.EntityManager;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 
 @Service
+@Slf4j
 public class OrderService {
 
     private final OrderRepository orderRepository;
@@ -51,6 +53,10 @@ public class OrderService {
                     .findById(idempotencyKey)
                     .orElseThrow();
 
+            log.debug(
+                    "event=order.idempotency.replayed orderId={}",
+                    existing.getOrderId()
+            );
             if (existing.getOrderId() == null) {
                 throw new IllegalStateException(
                         "Idempotency key has no associated order"
@@ -98,7 +104,10 @@ public class OrderService {
     public OrderResponse getOrder(Long orderId) {
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
-
+        log.debug(
+                "event=order.database.read orderId={}",
+                orderId
+        );
         return toResponse(order);
     }
 

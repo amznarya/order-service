@@ -6,6 +6,7 @@ import com.api.orderservice.dto.UpdateOrderStatusRequest;
 import com.api.orderservice.service.OrderService;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +15,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/orders")
+@Slf4j
 public class OrderController {
 
     private final OrderService orderService;
@@ -35,6 +37,12 @@ public class OrderController {
     ) {
         OrderResponse response =
                 orderService.createOrder(request, idempotencyKey);
+        log.info(
+                "event=order.create.completed orderId={} productId={} quantity={}",
+                response.id(),
+                response.productId(),
+                response.quantity()
+        );
         meterRegistry.counter("orders.create.completed").increment();
         return ResponseEntity
                 .created(URI.create("/api/v1/orders/" + response.id()))
@@ -56,6 +64,11 @@ public class OrderController {
         OrderResponse response = orderService.updateOrderStatus(
                 orderId,
                 request.status()
+        );
+        log.info(
+                "event=order.status.updated orderId={} status={}",
+                response.id(),
+                response.status()
         );
         meterRegistry.counter("orders.status.update.completed").increment();
         return ResponseEntity.ok(response);

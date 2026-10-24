@@ -30,6 +30,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+  output:
+    ansi:
+      enabled: always
 server:
   port: 8080
 
@@ -46,5 +50,9 @@ management:
       percentiles-histogram:
         http.server.requests: true
 logging:
+  pattern:
+    console: '%clr(%d{HH:mm:ss.SSS}){faint} %clr(%-5level) %clr([%thread]){faint} %clr([correlationId=%X{correlationId:-}]){magenta} %clr(%logger{36}){cyan} - %msg%n'
   level:
+    root: INFO
+    com.api.orderservice: TRACE
     org.springframework.cache.interceptor: TRACE
