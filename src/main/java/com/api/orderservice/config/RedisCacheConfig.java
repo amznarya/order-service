@@ -10,12 +10,14 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import tools.jackson.databind.json.JsonMapper;
+import org.springframework.data.redis.cache.RedisCacheWriter;
 
 import java.time.Duration;
 
 @Configuration
 @EnableCaching
 public class RedisCacheConfig {
+
 
     @Bean
     public RedisCacheConfiguration redisCacheConfiguration(
@@ -41,7 +43,12 @@ public class RedisCacheConfig {
             RedisConnectionFactory connectionFactory,
             RedisCacheConfiguration redisCacheConfiguration
     ) {
-        return RedisCacheManager.builder(connectionFactory)
+        RedisCacheWriter writer = RedisCacheWriter.create(
+                connectionFactory,
+                RedisCacheWriter.RedisCacheWriterConfigurer::immediateWrites
+        );
+
+        return RedisCacheManager.builder(writer)
                 .cacheDefaults(redisCacheConfiguration)
                 .transactionAware()
                 .build();

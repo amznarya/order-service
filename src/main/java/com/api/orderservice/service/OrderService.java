@@ -12,6 +12,10 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.UUID;
 
@@ -21,15 +25,18 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final IdempotencyRepository idempotencyRepository;
     private final EntityManager entityManager;
+    private final CacheManager cacheManager;
 
     public OrderService(
             OrderRepository orderRepository,
             IdempotencyRepository idempotencyRepository,
-            EntityManager entityManager
+            EntityManager entityManager,
+            CacheManager cacheManager
     ) {
         this.orderRepository = orderRepository;
         this.idempotencyRepository = idempotencyRepository;
         this.entityManager = entityManager;
+        this.cacheManager = cacheManager;
     }
 
     @Transactional
@@ -106,6 +113,23 @@ public class OrderService {
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
         order.updateStatus(status);
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        Cache cache = cacheManager.getCache("orders");
+
+                        if (cache == null) {
+                            throw new IllegalStateException(
+                                    "Orders cache is not configured"
+                            );
+                        }
+
+                        cache.evictIfPresent(orderId);
+                    }
+                }
+        );
 
         return toResponse(order);
     }
