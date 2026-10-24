@@ -8,10 +8,11 @@ import com.api.orderservice.exception.OrderNotFoundException;
 import com.api.orderservice.repository.IdempotencyRepository;
 import com.api.orderservice.repository.OrderRepository;
 import jakarta.persistence.EntityManager;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.cache.annotation.CacheEvict;
 
 import java.util.UUID;
 
@@ -21,15 +22,18 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final IdempotencyRepository idempotencyRepository;
     private final EntityManager entityManager;
+    private final CacheManager cacheManager;
 
     public OrderService(
             OrderRepository orderRepository,
             IdempotencyRepository idempotencyRepository,
-            EntityManager entityManager
+            EntityManager entityManager,
+            CacheManager cacheManager
     ) {
         this.orderRepository = orderRepository;
         this.idempotencyRepository = idempotencyRepository;
         this.entityManager = entityManager;
+        this.cacheManager = cacheManager;
     }
 
     @Transactional
@@ -101,7 +105,6 @@ public class OrderService {
     @Transactional
     @CacheEvict(cacheNames = "orders", key = "#orderId")
     public OrderResponse updateOrderStatus(Long orderId, String status) {
-
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 

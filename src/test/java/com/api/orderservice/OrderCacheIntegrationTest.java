@@ -187,7 +187,7 @@ class OrderCacheIntegrationTest extends PostgresIntegrationTest {
                 orderService.updateOrderStatus(orderId, "SHIPPED");
 
         assertThat(updated.status()).isEqualTo("SHIPPED");
-        
+
         // Redis key should be deleted after commit
         assertThat(redisTemplate.hasKey(cacheKey)).isFalse();
 
