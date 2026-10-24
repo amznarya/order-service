@@ -23,7 +23,7 @@
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-Local-326CE5?logo=kubernetes&logoColor=white)
 
 > [!IMPORTANT]
-> **Repository vs. local workspace:** This guide documents the working lab developed in October 2026. The GitHub `main` branch inspected for this README contains the Spring Boot application, Compose stack, metrics/traces configuration, CI, and k6 scripts. **The `k8s/` directory and generated Kubernetes dashboard files used in the completed local exercise were not yet present on that branch.** The Kubernetes section assumes you retain and commit those local files. See [Repository state and reproducibility](#repository-state-and-reproducibility). This README does not claim those files are available to a fresh clone today.
+> **Current repository state:** The `main` branch includes the complete Spring Boot application, Docker Compose stack, **all five Kubernetes manifests**, Prometheus and Tempo configuration, the Grafana dashboard generator, the generated dashboard JSON, and dashboard provisioning YAML. A fresh clone contains the source files needed for both deployment paths. **One bootstrap step is still required:** generate the `grafana-dashboard-provider` and `grafana-dashboard-definitions` ConfigMaps from their committed files before applying `k8s/grafana.yaml`. The application image and database/Grafana Secrets must also be created locally; a one-command Kustomize/Helm installer is not yet included. See [Kubernetes deployment](#kubernetes-deployment).
 
 ---
 
@@ -155,7 +155,7 @@ flowchart LR
 
 ### 2. Kubernetes — physical deployment
 
-This is the topology exercised locally; the Kubernetes manifests are local files pending commit to GitHub `main`.
+This is the topology exercised locally and codified in the committed `k8s/` manifests on GitHub `main`.
 
 ```mermaid
 flowchart TB
@@ -761,56 +761,49 @@ order-service/
 ├── tempo/
 │   └── tempo.yaml
 ├── grafana/
+│   ├── generate_k8s_dashboard.py
+│   ├── dashboards/
+│   │   └── orderservice-k8s.json
 │   └── provisioning/
-│       └── datasources/
-│           ├── prometheus.yml
-│           └── tempo.yml
-└── load-tests/
-    ├── get-order.js
-    ├── cache-compare.js
-    └── throughput.js
-```
-
-**Additional files created locally during the Kubernetes exercise (commit these to make this section reproducible):**
-
-```text
-order-service/
+│       ├── datasources/
+│       │   ├── prometheus.yml
+│       │   └── tempo.yml
+│       └── dashboards/
+│           └── provider.yaml
 ├── k8s/
 │   ├── dependencies.yaml
 │   ├── orderservice.yaml
 │   ├── prometheus.yaml
 │   ├── grafana.yaml
 │   └── tempo.yaml
-└── grafana/
-    ├── generate_k8s_dashboard.py
-    ├── dashboards/
-    │   └── orderservice-k8s.json
-    └── provisioning/
-        └── dashboards/
-            └── provider.yaml  # optional if provider is embedded in k8s/grafana.yaml
+└── load-tests/
+    ├── get-order.js
+    ├── cache-compare.js
+    └── throughput.js
 ```
 
-The running local Grafana manifest embeds the `grafana-dashboard-provider` ConfigMap; a separate `provider.yaml` is not required **if** that inlined provider is retained. Avoid provisioning the same named resource from competing sources.
+All files above are **present on GitHub `main`**. The Grafana provider configuration exists as `grafana/provisioning/dashboards/provider.yaml`; the committed `k8s/grafana.yaml` **references** `grafana-dashboard-provider` but does **not** define it. Create that ConfigMap from the provider file during setup.
 
 ### Repository state and reproducibility
 
-At the time of writing:
+At the time of the latest repository check:
 
-- **Verified on GitHub `main`**: source code, Docker Compose, application telemetry configuration, tests, `load-tests/`, Grafana data sources, Tempo/Prometheus Compose configs.
-- **Verified by local exercises in this conversation**: Kubernetes deployment of three application replicas; PostgreSQL, Redis, Prometheus, Grafana, Tempo; Pod discovery and tracing; Grafana dashboard provisioning.
-- **Not yet present in inspected GitHub tree**: `k8s/`, `grafana/generate_k8s_dashboard.py`, and `grafana/dashboards/orderservice-k8s.json`.
-- **Dockerfile difference to reconcile**: the inspected GitHub Dockerfile executes `mvn package -B` *with tests*, whereas the successfully built local variant skips tests during the Docker image build. See the [Docker build note](#docker-build-note).
+- **Committed on `main`:** Spring Boot source code, Docker Compose services, `.github/workflows/ci.yml`, k6 scripts, `k8s/` manifests, Grafana dashboard generator, dashboard JSON, provider configuration, and OpenTelemetry/Prometheus/Tempo settings.
+- **Locally verified in the lab:** three application replicas, Pod self-healing, Kubernetes Service reachability, three healthy Prometheus scrape targets, Grafana dashboard provisioning, and Tempo traces.
+- **Build fixed on `main`:** the multi-stage Dockerfile uses `mvn package -B -DskipTests` inside the image-build stage. CI continues running tests separately with `mvn -B clean verify`.
+- **Remaining bootstrap requirement:** Kubernetes namespace and Secrets, locally built `orderservice:local` image, and **both** Grafana ConfigMaps must be created before the related Deployments start.
+- **Not yet present:** a Kustomize or Helm installer that handles the entire setup via one declarative command.
 
-To save the completed local work:
+To publish this README at the repo root:
 
 ```bash
-git status
-git add README.md k8s/ grafana/
-git commit -m "docs: add architecture and reproducible observability lab guide"
+cp /path/to/downloaded/README.md ./README.md
+git add README.md
+git commit -m "docs: document full observability architecture and setup"
 git push
 ```
 
-Review `git status` first; commit only files you intend to publish. Never commit password values, `.env` files, kubeconfig, or secrets.
+Review `git status` first. Never commit password values, `.env` files, kubeconfig, or Kubernetes Secret manifests containing credentials.
 
 ---
 
@@ -839,7 +832,7 @@ git clone https://github.com/amznarya/order-service.git
 cd order-service
 ```
 
-If you are working in your existing local project directory, stay there—especially if your local `k8s/` files have not been pushed.
+If you already have a local checkout, run `git pull --ff-only` before following the Kubernetes steps, after handling any uncommitted changes.
 
 ---
 
@@ -1075,8 +1068,8 @@ The full request trace should let you distinguish application time, DB path, and
 
 ## Kubernetes deployment
 
-> [!WARNING]
-> This section requires the **local `k8s/` manifests from the completed lab**. They were not in GitHub `main` when inspected. A clean clone needs those files copied/committed before these commands will work. The manifests below are referenced by filename; this README does not pretend they are already published.
+> [!NOTE]
+> All five `k8s/*.yaml` files and the Grafana dashboard files are committed to GitHub `main`. The procedure below is usable from a fresh clone **after** creating local Secrets and a container image. Grafana requires two ConfigMaps generated from repository files; `k8s/grafana.yaml` alone does not define them.
 
 ### Prerequisite: local cluster
 
@@ -1144,19 +1137,13 @@ docker build -t orderservice:local .
 
 #### Docker build note
 
-The GitHub `main` Dockerfile inspected for this guide contains:
-
-```dockerfile
-RUN mvn package -B
-```
-
-That command executes integration tests that use Testcontainers. During a Docker image build, Testcontainers usually cannot access the host Docker daemon, so the build may fail. The successful **local lab image** was built with:
+The committed Dockerfile now uses:
 
 ```dockerfile
 RUN mvn package -B -DskipTests
 ```
 
-Use that change for the Docker *image-build stage*, while keeping `./mvnw clean verify` as a separate CI/test step. Do not confuse skipping tests **during image packaging** with skipping tests altogether.
+This is intentional: the image-build container normally cannot run Testcontainers integration tests because it lacks Docker daemon access. The CI workflow still runs `mvn -B clean verify`, including integration tests, as a **separate correctness gate**. Run `./mvnw clean verify` locally when you want to test before building the image.
 
 The Kubernetes Deployment currently uses:
 
@@ -1210,18 +1197,18 @@ env:
     value: "http://tempo:4318/v1/traces"
 ```
 
-These are the values used during the local lab; add them under the existing `env:` key, **not** as a second `env:` block.
+These values are **already present** under the existing `env:` key of the committed `k8s/orderservice.yaml`. Verify them before deployment, and do not duplicate the `env:` block.
 
 The app's committed `application.yaml` has a localhost tracing endpoint. Spring's external configuration environment-variable override is what redirects **Kubernetes Pods** to the Tempo **Service**.
 
-Scale to three replicas in the manifest:
+The committed Deployment already requests three replicas:
 
 ```yaml
 spec:
   replicas: 3
 ```
 
-Then:
+Deploy it:
 
 ```bash
 kubectl apply -f k8s/orderservice.yaml
@@ -1234,37 +1221,43 @@ kubectl get pods -n observability-lab
 
 ### Step 6 — Generate/provision the Grafana dashboard
 
-First, ensure your local generator and dashboard files exist:
+Both the generator and its output are already committed:
+
+```bash
+ls -l grafana/generate_k8s_dashboard.py \
+  grafana/dashboards/orderservice-k8s.json \
+  grafana/provisioning/dashboards/provider.yaml
+```
+
+Optionally regenerate the dashboard JSON (after modifying panel definitions):
 
 ```bash
 python3 grafana/generate_k8s_dashboard.py
-ls -l grafana/dashboards/orderservice-k8s.json
 ```
 
-Generate/update the ConfigMap from the dashboard directory:
+**Important:** `k8s/grafana.yaml` references `grafana-dashboard-provider`, but does **not** create that ConfigMap. Create **both** dashboard-related ConfigMaps from the committed files **before** applying the Grafana Deployment:
 
 ```bash
+# 1. Dashboard provider: tells Grafana where to find dashboard JSON
+kubectl create configmap grafana-dashboard-provider \
+  -n observability-lab \
+  --from-file=provider.yaml=grafana/provisioning/dashboards/provider.yaml \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# 2. Dashboard definitions: actual JSON dashboards
 kubectl create configmap grafana-dashboard-definitions \
   -n observability-lab \
   --from-file=grafana/dashboards \
   --dry-run=client -o yaml | kubectl apply -f -
-```
 
-The final local `k8s/grafana.yaml` contains:
-
-- `grafana-datasources` ConfigMap with Prometheus (`http://prometheus:9090`) and Tempo (`http://tempo:3200`).
-- `grafana-dashboard-provider` ConfigMap with provider path `/etc/grafana/dashboards`.
-- Grafana Deployment with the corresponding volume mounts.
-- `grafana-data` PVC and Grafana Service.
-
-Deploy it:
-
-```bash
+# 3. Grafana data sources, PVC, Deployment and Service
 kubectl apply -f k8s/grafana.yaml
 
 kubectl rollout status deployment/grafana \
   -n observability-lab --timeout=180s
 ```
+
+The committed `k8s/grafana.yaml` defines the Prometheus/Tempo data sources, the Grafana Deployment with mounts for both dashboard ConfigMaps, its PVC, and the Service. The provider configuration itself is maintained in `grafana/provisioning/dashboards/provider.yaml`.
 
 When changing dashboard JSON, regenerate/update the ConfigMap. If provisioning does not refresh automatically, restart Grafana:
 
@@ -1418,7 +1411,7 @@ flowchart LR
 | Data source provisioning | Creates Prometheus/Tempo connections automatically |
 | Grafana Deployment mounts | Exposes provider/data sources/dashboard files to Grafana |
 
-The current Kubernetes dashboard generator defines panels from a Python array and produces dashboard UID `orderservice-k8s`. In the completed local fix, `grafana-dashboard-provider` is embedded in `k8s/grafana.yaml`.
+The committed Kubernetes dashboard generator defines panels from a Python array and produces dashboard UID `orderservice-k8s`. The provider is committed as `grafana/provisioning/dashboards/provider.yaml` and becomes the `grafana-dashboard-provider` ConfigMap through the explicit bootstrap command above.
 
 ### Troubleshooting dashboard provisioning
 
@@ -1457,7 +1450,7 @@ kubectl logs -n observability-lab deployment/grafana --tail=100 \
   | grep -iE 'provision|dashboard|error|failed'
 ```
 
-**Observed issue during setup:** the JSON ConfigMap existed but the provider ConfigMap did not, so Grafana had no instructions to load the JSON. Adding the provider ConfigMap to `k8s/grafana.yaml` and restarting Grafana fixed it.
+**Observed issue during setup:** the JSON ConfigMap existed but the provider ConfigMap did not, so Grafana had no instructions to load the JSON. The published setup now documents the explicit provider-ConfigMap creation step; when it is present and mounted, Grafana can provision the dashboard.
 
 ### Why this is useful
 
@@ -1724,9 +1717,9 @@ Check the DB URL, database credentials, Redis host, and whether Flyway can conne
 
 ### `docker build` fails while executing tests
 
-**Likely cause:** Testcontainers integration tests run inside a Dockerfile build stage, without Docker daemon access.
+**Past cause:** An earlier Dockerfile version ran Testcontainers integration tests inside the Docker build stage without Docker daemon access.
 
-**Fix for the lab:** change Dockerfile `RUN mvn package -B` to `RUN mvn package -B -DskipTests`, then run full `./mvnw clean verify` separately (outside the Dockerfile).
+**Already fixed on `main`:** the current Dockerfile uses `RUN mvn package -B -DskipTests`. If the image build still fails, confirm that your checkout is current (`git pull --ff-only` after resolving local changes), inspect Maven errors, and run `./mvnw clean verify` separately with a working Docker daemon.
 
 ### Spring Boot Pod is CrashLoopBackOff
 
@@ -1981,7 +1974,7 @@ If you're using this repository to deepen backend and distributed-system design 
 
 **Core lab:** completed locally — API, persistent data, caching, metrics, traces, logs with context, load tests, Kubernetes scaling/self-healing, Prometheus Pod discovery, Grafana Dashboard as Code, and Tempo tracing.
 
-**Remaining release/documentation task:** commit the local Kubernetes manifests and dashboard generator/JSON into the GitHub repository, then introduce a single-command deployment workflow.
+**Repository state:** Kubernetes manifests, Grafana dashboard generator, dashboard JSON, and provider configuration have all been pushed to `main`. **Next improvement:** add Kustomize/Helm automation for namespace/config/Secrets conventions, provisioning ConfigMaps, and deploy ordering, so that manual bootstrap commands are minimized.
 
 This repository is intended to be a **hands-on engineering reference**: run the system, break a dependency, measure the failure, explain it with metrics/traces/logs, and improve the design.
 
