@@ -8,14 +8,11 @@ import com.api.orderservice.exception.OrderNotFoundException;
 import com.api.orderservice.repository.IdempotencyRepository;
 import com.api.orderservice.repository.OrderRepository;
 import jakarta.persistence.EntityManager;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.UUID;
 
@@ -108,28 +105,10 @@ public class OrderService {
     @Transactional
     @CacheEvict(cacheNames = "orders", key = "#orderId")
     public OrderResponse updateOrderStatus(Long orderId, String status) {
-
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
         order.updateStatus(status);
-
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        Cache cache = cacheManager.getCache("orders");
-
-                        if (cache == null) {
-                            throw new IllegalStateException(
-                                    "Orders cache is not configured"
-                            );
-                        }
-
-                        cache.evictIfPresent(orderId);
-                    }
-                }
-        );
 
         return toResponse(order);
     }
