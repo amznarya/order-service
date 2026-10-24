@@ -13,6 +13,7 @@ import tools.jackson.databind.json.JsonMapper;
 import org.springframework.data.redis.cache.RedisCacheWriter;
 
 import java.time.Duration;
+import java.util.Set;
 
 @Configuration
 @EnableCaching
@@ -50,6 +51,8 @@ public class RedisCacheConfig {
 
         return RedisCacheManager.builder(writer)
                 .cacheDefaults(redisCacheConfiguration)
+                .initialCacheNames(Set.of("orders"))
+                .enableStatistics()
                 .transactionAware()
                 .build();
     }
