@@ -23,7 +23,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
-
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.FunctionCounter;
 @SpringBootTest
 class OrderCacheIntegrationTest extends PostgresIntegrationTest {
 
@@ -41,6 +42,21 @@ class OrderCacheIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+    private double cacheGets(String result) {
+        FunctionCounter counter = meterRegistry.find("cache.gets")
+                .tags("cache", "orders", "result", result)
+                .functionCounter();
+
+        assertThat(counter)
+                .as("cache.gets metric for result=" + result)
+                .isNotNull();
+
+        return counter.count();
+    }
 
     static final GenericContainer<?> redis =
             new GenericContainer<>("redis:7-alpine")
@@ -254,5 +270,34 @@ class OrderCacheIntegrationTest extends PostgresIntegrationTest {
                 .orElseThrow();
 
         assertThat(persisted.getStatus()).isEqualTo("CREATED");
+    }
+
+    @Test
+    void shouldRecordRedisCacheHitsAndMisses() {
+
+        OrderResponse created = orderService.createOrder(
+                new CreateOrderRequest("metrics-product", 1),
+                UUID.randomUUID()
+        );
+
+        Long orderId = created.id();
+        redisTemplate.delete("orders::" + orderId);
+
+        // Capture baseline because other tests may have used the cache.
+        double missesBefore = cacheGets("miss");
+        double hitsBefore = cacheGets("hit");
+
+        // First request: cache MISS
+        orderService.getOrder(orderId);
+
+        assertThat(cacheGets("miss") - missesBefore)
+                .isEqualTo(1.0);
+
+        // Two subsequent requests: cache HITS
+        orderService.getOrder(orderId);
+        orderService.getOrder(orderId);
+
+        assertThat(cacheGets("hit") - hitsBefore)
+                .isEqualTo(2.0);
     }
 }
