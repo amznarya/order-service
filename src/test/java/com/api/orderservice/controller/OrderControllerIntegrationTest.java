@@ -44,8 +44,11 @@ class OrderControllerIntegrationTest extends PostgresIntegrationTest {
     private MeterRegistry meterRegistry;
 
     private long observationCount(String metricName) {
-        Timer timer = meterRegistry.find(metricName).timer();
-        return timer == null ? 0 : timer.count();
+        return meterRegistry.find(metricName)
+                .timers()
+                .stream()
+                .mapToLong(Timer::count)
+                .sum();
     }
 
     private double counterValue(String metricName) {
