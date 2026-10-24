@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -18,7 +17,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.GenericContainer;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.util.UUID;
@@ -66,16 +64,6 @@ class OrderCacheIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void shouldConnectToRedisTestContainer() {
-        System.out.println("Redis factory: " + connectionFactory);
-        System.out.println("Redis container: " +
-                redis.getHost() + ":" + redis.getMappedPort(6379));
-        System.out.println("Redis template factory same: " +
-                (redisTemplate.getConnectionFactory() == connectionFactory));
-        var lettuceFactory = (LettuceConnectionFactory) connectionFactory;
-
-        System.out.println("Actual Redis host: " + lettuceFactory.getHostName());
-        System.out.println("Actual Redis port: " + lettuceFactory.getPort());
-        System.out.println("Expected Redis port: " + redis.getMappedPort(6379));
         try (var connection = connectionFactory.getConnection()) {
             assertThat(connection.ping()).isEqualTo("PONG");
         }
@@ -147,12 +135,6 @@ class OrderCacheIntegrationTest extends PostgresIntegrationTest {
         // First GET: cache MISS
         orderService.getOrder(orderId);
 
-        System.out.println("Redis key: " + cacheKey);
-        System.out.println("Redis exists: " + redisTemplate.hasKey(cacheKey));
-        System.out.println("CacheManager type: " + cacheManager.getClass().getName());
-        System.out.println("CacheManager value: " +
-                cacheManager.getCache("orders").get(orderId));
-
         verify(orderRepository, times(1)).findById(orderId);
         assertThat(redisTemplate.hasKey(cacheKey)).isTrue();
 
@@ -211,12 +193,6 @@ class OrderCacheIntegrationTest extends PostgresIntegrationTest {
 
         // 5. Second GET -> Cache MISS -> PostgreSQL
         OrderResponse second = orderService.getOrder(orderId);
-
-        System.out.println("Cache key: " + cacheKey);
-        System.out.println("Redis exists: " + redisTemplate.hasKey(cacheKey));
-        System.out.println("CacheManager value: " +
-                cacheManager.getCache("orders").get(orderId));
-        System.out.println("Redis keys: " + redisTemplate.keys("orders::*"));
 
         assertThat(second.status()).isEqualTo("SHIPPED");
         assertThat(redisTemplate.hasKey(cacheKey)).isTrue();
