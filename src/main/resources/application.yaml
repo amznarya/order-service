@@ -49,9 +49,21 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces
+  otlp:
+    metrics:
+      export:
+        enabled: false
 logging:
   pattern:
-    console: '%clr(%d{HH:mm:ss.SSS}){faint} %clr(%-5level) %clr([%thread]){faint} %clr([correlationId=%X{correlationId:-}]){magenta} %clr(%logger{36}){cyan} - %msg%n'
+    console: '%clr(%d{HH:mm:ss.SSS}){faint} %clr(%-5level) %clr([%thread]){faint} %clr([correlationId=%X{correlationId:-}]){magenta} %clr([traceId=%X{traceId:-} spanId=%X{spanId:-}]){yellow} %clr(%logger{36}){cyan} - %msg%n'
   level:
     root: INFO
     com.api.orderservice: TRACE

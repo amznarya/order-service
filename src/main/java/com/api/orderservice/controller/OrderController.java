@@ -9,7 +9,8 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import java.net.URI;
 import java.util.UUID;
 
@@ -20,13 +21,15 @@ public class OrderController {
 
     private final OrderService orderService;
     private final MeterRegistry meterRegistry;
+    private final ObservationRegistry observationRegistry;
 
     public OrderController(
             OrderService orderService,
-            MeterRegistry meterRegistry
+            MeterRegistry meterRegistry, ObservationRegistry observationRegistry
     ) {
         this.orderService = orderService;
         this.meterRegistry = meterRegistry;
+        this.observationRegistry = observationRegistry;
     }
 
 
@@ -35,8 +38,15 @@ public class OrderController {
             @RequestHeader("Idempotency-Key") UUID idempotencyKey,
             @Valid @RequestBody CreateOrderRequest request
     ) {
-        OrderResponse response =
-                orderService.createOrder(request, idempotencyKey);
+
+        OrderResponse response = Observation
+                .createNotStarted("order.create", observationRegistry)
+                .observe(() -> orderService.createOrder(
+                        request, idempotencyKey
+                ));
+
+//        OrderResponse response =
+//                orderService.createOrder(request, idempotencyKey);
         log.info(
                 "event=order.create.completed orderId={} productId={} quantity={}",
                 response.id(),
@@ -53,7 +63,12 @@ public class OrderController {
     public ResponseEntity<OrderResponse> getOrder(
             @PathVariable Long orderId
     ) {
-        return ResponseEntity.ok(orderService.getOrder(orderId));
+        OrderResponse response = Observation
+                .createNotStarted("order.get", observationRegistry)
+                .observe(() -> orderService.getOrder(orderId));
+
+        return ResponseEntity.ok(response);
+//        return ResponseEntity.ok(orderService.getOrder(orderId));
     }
 
     @PatchMapping("/{orderId}/status")
@@ -61,10 +76,15 @@ public class OrderController {
             @PathVariable Long orderId,
             @Valid @RequestBody UpdateOrderStatusRequest request
     ) {
-        OrderResponse response = orderService.updateOrderStatus(
-                orderId,
-                request.status()
-        );
+        OrderResponse response = Observation
+                .createNotStarted("order.status.update", observationRegistry)
+                .observe(() -> orderService.updateOrderStatus(
+                        orderId, request.status()
+                ));
+//        OrderResponse response = orderService.updateOrderStatus(
+//                orderId,
+//                request.status()
+//        );
         log.info(
                 "event=order.status.updated orderId={} status={}",
                 response.id(),
