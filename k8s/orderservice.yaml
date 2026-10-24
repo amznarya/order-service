@@ -38,6 +38,8 @@ spec:
               value: redis
             - name: REDIS_PORT
               value: "6379"
+            - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
+              value: "http://tempo:4318/v1/traces"
 
           resources:
             requests:
