@@ -77,6 +77,16 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+  tempo:
+    image: grafana/tempo:3.0.0
+    container_name: order-service-tempo
+    command: [ "-target=all", "-config.file=/etc/tempo.yaml" ]
+    ports:
+      - "127.0.0.1:3200:3200"
+      - "127.0.0.1:4318:4318"
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
 
 volumes:
   postgres_data:
@@ -84,3 +94,4 @@ volumes:
   redis-insight-data:
   prometheus_data:
   grafana_data:
+  tempo_data:

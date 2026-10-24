@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -41,6 +42,14 @@ class OrderControllerIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     private MeterRegistry meterRegistry;
+
+    private long observationCount(String metricName) {
+        return meterRegistry.find(metricName)
+                .timers()
+                .stream()
+                .mapToLong(Timer::count)
+                .sum();
+    }
 
     private double counterValue(String metricName) {
         Counter counter = meterRegistry.find(metricName).counter();
@@ -250,5 +259,64 @@ class OrderControllerIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(counterValue("orders.status.update.completed") - updatesBefore)
                 .isEqualTo(1.0);
+    }
+
+    @Test
+    void shouldRecordCustomOrderObservations() throws Exception {
+
+        long createsBefore = observationCount("order.create");
+        long getsBefore = observationCount("order.get");
+        long readsBefore = observationCount("order.database.read");
+        long updatesBefore = observationCount("order.status.update");
+
+        String key = UUID.randomUUID().toString();
+
+        // Create new order
+        MvcResult created = mockMvc().perform(
+                post("/api/v1/orders")
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "productId": "tracing-integration",
+                                "quantity": 1
+                            }
+                            """)
+        ).andExpect(status().isCreated()).andReturn();
+
+        long orderId = objectMapper.readTree(
+                created.getResponse().getContentAsString()
+        ).get("id").asLong();
+
+        // First GET = cache miss
+        mockMvc().perform(
+                get("/api/v1/orders/{orderId}", orderId)
+        ).andExpect(status().isOk());
+
+        // Second GET = cache hit
+        mockMvc().perform(
+                get("/api/v1/orders/{orderId}", orderId)
+        ).andExpect(status().isOk());
+
+        // Update status
+        mockMvc().perform(
+                patch("/api/v1/orders/{orderId}/status", orderId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"status":"SHIPPED"}
+                            """)
+        ).andExpect(status().isOk());
+
+        assertThat(observationCount("order.create") - createsBefore)
+                .isEqualTo(1);
+
+        assertThat(observationCount("order.get") - getsBefore)
+                .isEqualTo(2);
+
+        assertThat(observationCount("order.database.read") - readsBefore)
+                .isEqualTo(1);
+
+        assertThat(observationCount("order.status.update") - updatesBefore)
+                .isEqualTo(1);
     }
 }

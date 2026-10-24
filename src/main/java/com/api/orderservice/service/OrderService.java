@@ -14,6 +14,8 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 
 import java.util.UUID;
 
@@ -25,17 +27,19 @@ public class OrderService {
     private final IdempotencyRepository idempotencyRepository;
     private final EntityManager entityManager;
     private final CacheManager cacheManager;
+    private final ObservationRegistry observationRegistry;
 
     public OrderService(
             OrderRepository orderRepository,
             IdempotencyRepository idempotencyRepository,
             EntityManager entityManager,
-            CacheManager cacheManager
+            CacheManager cacheManager, ObservationRegistry observationRegistry
     ) {
         this.orderRepository = orderRepository;
         this.idempotencyRepository = idempotencyRepository;
         this.entityManager = entityManager;
         this.cacheManager = cacheManager;
+        this.observationRegistry = observationRegistry;
     }
 
     @Transactional
@@ -102,13 +106,29 @@ public class OrderService {
     @Cacheable(cacheNames = "orders", key = "#orderId")
     @Transactional(readOnly = true)
     public OrderResponse getOrder(Long orderId) {
-        OrderEntity order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new OrderNotFoundException(orderId));
-        log.debug(
-                "event=order.database.read orderId={}",
-                orderId
-        );
+
+        OrderEntity order = Observation
+                .createNotStarted("order.database.read", observationRegistry)
+                .highCardinalityKeyValue(
+                        "order.id",
+                        orderId.toString()
+                )
+                .observe(() -> orderRepository.findById(orderId)
+                        .orElseThrow(() ->
+                                new OrderNotFoundException(orderId)
+                        ));
+
+        log.debug("event=order.database.read orderId={}", orderId);
+
         return toResponse(order);
+
+//        OrderEntity order = orderRepository.findById(orderId)
+//                .orElseThrow(() -> new OrderNotFoundException(orderId));
+//        log.debug(
+//                "event=order.database.read orderId={}",
+//                orderId
+//        );
+//        return toResponse(order);
     }
 
     @Transactional
